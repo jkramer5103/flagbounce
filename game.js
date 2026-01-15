@@ -41,6 +41,13 @@ const CONFIG = {
     }
 };
 
+// Background Music
+let MUSIC_TRACKS = [];
+let backgroundMusic = null;
+let currentTrackIndex = -1;
+let musicStarted = false;
+let pendingMusicStart = false;
+
 // Game State
 const state = {
     flags: [],
@@ -389,6 +396,9 @@ function checkWinner() {
         state.leaderboard[country.code].wins++;
         updateLeaderboard();
         
+        // Report to server
+        reportRoundComplete(state.winner);
+        
         showWinnerAnnouncement(country);
         announceWinner(country);
         
@@ -565,6 +575,167 @@ function drawWinnerFlag() {
     ctx.restore();
 }
 
+// Fetch music tracks from Flask API
+async function loadMusicTracks() {
+    try {
+        const response = await fetch('/api/music');
+        const data = await response.json();
+        
+        if (data.tracks && data.tracks.length > 0) {
+            MUSIC_TRACKS = data.tracks;
+            console.log(`Loaded ${MUSIC_TRACKS.length} music tracks`);
+        } else {
+            console.warn('No music tracks found');
+        }
+    } catch (error) {
+        console.error('Failed to load music tracks:', error);
+    }
+}
+
+// Play random background music
+function playRandomMusic() {
+    if (MUSIC_TRACKS.length === 0) {
+        console.warn('No music tracks available');
+        return;
+    }
+    
+    // Get a random track different from the current one
+    let newIndex;
+    do {
+        newIndex = Math.floor(Math.random() * MUSIC_TRACKS.length);
+    } while (newIndex === currentTrackIndex && MUSIC_TRACKS.length > 1);
+    
+    currentTrackIndex = newIndex;
+    
+    // Stop current music if playing
+    if (backgroundMusic) {
+        backgroundMusic.pause();
+        backgroundMusic.currentTime = 0;
+    }
+    
+    // Create new audio element
+    backgroundMusic = new Audio(MUSIC_TRACKS[currentTrackIndex]);
+    backgroundMusic.volume = 0.30; // Set volume to 30% so it doesn't overpower game sounds
+    
+    // When song ends, play another random one
+    backgroundMusic.addEventListener('ended', playRandomMusic);
+    
+    // Play the music
+    const playPromise = backgroundMusic.play();
+    
+    if (playPromise !== undefined) {
+        playPromise.then(() => {
+            musicStarted = true;
+            pendingMusicStart = false;
+            console.log('Background music started');
+        }).catch(error => {
+            console.warn('Autoplay blocked, waiting for user interaction:', error);
+            pendingMusicStart = true;
+        });
+    }
+}
+
+// Attempt to start music on user interaction if autoplay was blocked
+function tryStartMusic() {
+    if (pendingMusicStart && !musicStarted && backgroundMusic) {
+        backgroundMusic.play().then(() => {
+            musicStarted = true;
+            pendingMusicStart = false;
+            console.log('Background music started after user interaction');
+            // Remove listeners after successful start
+            document.removeEventListener('click', tryStartMusic);
+            document.removeEventListener('keydown', tryStartMusic);
+            document.removeEventListener('touchstart', tryStartMusic);
+        }).catch(error => {
+            console.warn('Still unable to play music:', error);
+        });
+    }
+}
+
+// Poll for admin commands
+async function pollAdminCommands() {
+    try {
+        const response = await fetch('/api/admin/command');
+        const data = await response.json();
+        
+        if (data.command) {
+            console.log('Admin command received:', data.command);
+            executeAdminCommand(data.command, data);
+        }
+        
+        // Update volume if changed
+        if (backgroundMusic && data.volume !== undefined) {
+            backgroundMusic.volume = data.volume / 100;
+        }
+    } catch (error) {
+        // Silently fail - server might not be available
+    }
+}
+
+// Execute admin commands
+function executeAdminCommand(command, data) {
+    switch (command) {
+        case 'reset':
+        case 'new_round':
+            hideWinnerAnnouncement();
+            resetGame();
+            break;
+        case 'clear_leaderboard':
+            state.leaderboard = {};
+            localStorage.removeItem('flagrace-leaderboard');
+            updateLeaderboard();
+            break;
+        case 'skip_track':
+            playRandomMusic();
+            break;
+        case 'toggle_music':
+            if (backgroundMusic) {
+                if (data.musicPlaying) {
+                    backgroundMusic.play().catch(() => {});
+                } else {
+                    backgroundMusic.pause();
+                }
+            }
+            break;
+        case 'set_volume':
+            if (backgroundMusic && data.volume !== undefined) {
+                backgroundMusic.volume = data.volume / 100;
+            }
+            break;
+    }
+}
+
+// Report round completion to server
+async function reportRoundComplete(winner) {
+    try {
+        await fetch('/api/admin/round-complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                winner: {
+                    code: winner.country.code,
+                    name: winner.country.name
+                }
+            })
+        });
+    } catch (error) {
+        // Silently fail
+    }
+}
+
+// Sync leaderboard to server periodically
+async function syncLeaderboardToServer() {
+    try {
+        await fetch('/api/admin/leaderboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ leaderboard: state.leaderboard })
+        });
+    } catch (error) {
+        // Silently fail
+    }
+}
+
 // Load countries and flag images
 async function loadAssets() {
     console.log('Loading countries...');
@@ -614,8 +785,16 @@ async function init() {
         }
     });
     
+    // Add listeners to start music on first user interaction if autoplay blocked
+    document.addEventListener('click', tryStartMusic, { once: false });
+    document.addEventListener('keydown', tryStartMusic, { once: false });
+    document.addEventListener('touchstart', tryStartMusic, { once: false });
+    
     // Load assets first
     await loadAssets();
+    
+    // Load music tracks from backend
+    await loadMusicTracks();
     
     // Load leaderboard from localStorage
     const saved = localStorage.getItem('flagrace-leaderboard');
@@ -627,10 +806,19 @@ async function init() {
     // Save leaderboard periodically
     setInterval(() => {
         localStorage.setItem('flagrace-leaderboard', JSON.stringify(state.leaderboard));
+        syncLeaderboardToServer();
     }, 5000);
+    
+    // Poll for admin commands
+    setInterval(pollAdminCommands, 1000);
     
     initFlags();
     gameLoop();
+    
+    // Start background music immediately
+    // Will work in OBS browser source and Firefox
+    // Chrome will retry on first user interaction if blocked
+    playRandomMusic();
 }
 
 // Start the game

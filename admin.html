@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flag Race - Admin Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .panel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel h2 {
+            margin-bottom: 20px;
+            font-size: 1.4rem;
+            color: #a0a0ff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 10px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 5px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(17, 153, 142, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(240, 147, 251, 0.4);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .music-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        .music-item {
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .leaderboard-list {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .leaderboard-rank {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #667eea;
+            width: 40px;
+        }
+
+        .leaderboard-flag {
+            width: 40px;
+            height: 30px;
+            border-radius: 4px;
+            margin-right: 15px;
+            object-fit: cover;
+        }
+
+        .leaderboard-name {
+            flex: 1;
+        }
+
+        .leaderboard-wins {
+            font-weight: 700;
+            color: #38ef7d;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .status-online {
+            background: #38ef7d;
+            box-shadow: 0 0 10px #38ef7d;
+        }
+
+        .status-offline {
+            background: #f5576c;
+            box-shadow: 0 0 10px #f5576c;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .volume-control input[type="range"] {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .volume-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        .volume-value {
+            min-width: 50px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .log-area {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .log-time {
+            color: #667eea;
+            margin-right: 10px;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            border-radius: 10px;
+            font-weight: 600;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.error {
+            background: rgba(245, 87, 108, 0.9);
+        }
+
+        .toast.success {
+            background: rgba(56, 239, 125, 0.9);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Flag Race Admin Panel</h1>
+        
+        <div class="panel-grid">
+            <!-- Game Controls -->
+            <div class="panel">
+                <h2>🎯 Game Controls</h2>
+                <button class="btn btn-danger" onclick="resetGame()">Reset Current Round</button>
+                <button class="btn btn-warning" onclick="clearLeaderboard()">Clear Leaderboard</button>
+                <button class="btn btn-primary" onclick="forceNewRound()">Force New Round</button>
+            </div>
+
+            <!-- Server Status -->
+            <div class="panel">
+                <h2>📡 Server Status</h2>
+                <p style="margin-bottom: 15px;">
+                    <span class="status-indicator status-online" id="status-indicator"></span>
+                    <span id="status-text">Connected</span>
+                </p>
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-rounds">0</div>
+                        <div class="stat-label">Total Rounds</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-countries">0</div>
+                        <div class="stat-label">Countries</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Music Controls -->
+            <div class="panel">
+                <h2>🎵 Music Controls</h2>
+                <div class="music-list" id="music-list">
+                    <div class="music-item">Loading...</div>
+                </div>
+                <button class="btn btn-primary" onclick="skipTrack()">Skip Current Track</button>
+                <button class="btn btn-success" onclick="toggleMusic()">Play/Pause Music</button>
+                <div class="volume-control">
+                    <span>🔊</span>
+                    <input type="range" id="volume-slider" min="0" max="100" value="30" onchange="setVolume(this.value)">
+                    <span class="volume-value" id="volume-value">30%</span>
+                </div>
+            </div>
+
+            <!-- Leaderboard -->
+            <div class="panel">
+                <h2>🏆 Current Leaderboard</h2>
+                <div class="leaderboard-list" id="leaderboard-list">
+                    <div class="leaderboard-item">Loading...</div>
+                </div>
+                <button class="btn btn-danger" onclick="clearLeaderboard()" style="margin-top: 15px;">Clear All Scores</button>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="panel" style="grid-column: span 2;">
+                <h2>📋 Activity Log</h2>
+                <div class="log-area" id="log-area">
+                    <div class="log-entry">
+                        <span class="log-time">[--:--:--]</span>
+                        <span>Admin panel loaded</span>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="clearLog()" style="margin-top: 15px;">Clear Log</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // State
+        let gameState = {
+            connected: false,
+            musicPlaying: false,
+            volume: 30
+        };
+
+        // Show toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Add log entry
+        function addLog(message) {
+            const logArea = document.getElementById('log-area');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">[${time}]</span><span>${message}</span>`;
+            logArea.insertBefore(entry, logArea.firstChild);
+        }
+
+        // API calls
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            try {
+                const options = { method };
+                if (data) {
+                    options.headers = { 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(data);
+                }
+                const response = await fetch(endpoint, options);
+                return await response.json();
+            } catch (error) {
+                console.error('API Error:', error);
+                showToast('API Error: ' + error.message, 'error');
+                return null;
+            }
+        }
+
+        // Game Controls
+        async function resetGame() {
+            const result = await apiCall('/api/admin/reset', 'POST');
+            if (result && result.success) {
+                showToast('Game reset successfully!', 'success');
+                addLog('Game round reset by admin');
+            } else {
+                showToast('Failed to reset game', 'error');
+            }
+        }
+
+        async function clearLeaderboard() {
+            if (!confirm('Are you sure you want to clear the leaderboard?')) return;
+            const result = await apiCall('/api/admin/clear-leaderboard', 'POST');
+            if (result && result.success) {
+                showToast('Leaderboard cleared!', 'success');
+                addLog('Leaderboard cleared by admin');
+                loadLeaderboard();
+            } else {
+                showToast('Failed to clear leaderboard', 'error');
+            }
+        }
+
+        async function forceNewRound() {
+            const result = await apiCall('/api/admin/new-round', 'POST');
+            if (result && result.success) {
+                showToast('New round started!', 'success');
+                addLog('New round forced by admin');
+            } else {
+                showToast('Failed to start new round', 'error');
+            }
+        }
+
+        // Music Controls
+        async function skipTrack() {
+            const result = await apiCall('/api/admin/skip-track', 'POST');
+            if (result && result.success) {
+                showToast('Track skipped!', 'success');
+                addLog('Music track skipped');
+            }
+        }
+
+        async function toggleMusic() {
+            const result = await apiCall('/api/admin/toggle-music', 'POST');
+            if (result && result.success) {
+                gameState.musicPlaying = result.playing;
+                showToast(result.playing ? 'Music playing' : 'Music paused', 'success');
+                addLog(result.playing ? 'Music resumed' : 'Music paused');
+            }
+        }
+
+        async function setVolume(value) {
+            document.getElementById('volume-value').textContent = value + '%';
+            const result = await apiCall('/api/admin/volume', 'POST', { volume: parseInt(value) });
+            if (result && result.success) {
+                addLog(`Volume set to ${value}%`);
+            }
+        }
+
+        // Load data
+        async function loadMusicList() {
+            const result = await apiCall('/api/music');
+            if (result && result.tracks) {
+                const list = document.getElementById('music-list');
+                list.innerHTML = result.tracks.map(track => {
+                    const name = track.split('/').pop().replace('.mp3', '');
+                    return `<div class="music-item" title="${name}">${name}</div>`;
+                }).join('');
+            }
+        }
+
+        async function loadLeaderboard() {
+            const result = await apiCall('/api/admin/leaderboard');
+            if (result && result.leaderboard) {
+                const list = document.getElementById('leaderboard-list');
+                const entries = Object.entries(result.leaderboard)
+                    .sort((a, b) => b[1].wins - a[1].wins)
+                    .slice(0, 10);
+                
+                if (entries.length === 0) {
+                    list.innerHTML = '<div class="leaderboard-item">No scores yet</div>';
+                    return;
+                }
+                
+                list.innerHTML = entries.map(([code, data], index) => `
+                    <div class="leaderboard-item">
+                        <span class="leaderboard-rank">#${index + 1}</span>
+                        <img class="leaderboard-flag" src="assets/${code}.png" alt="${code}">
+                        <span class="leaderboard-name">${data.name}</span>
+                        <span class="leaderboard-wins">${data.wins} wins</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function loadStats() {
+            const result = await apiCall('/api/admin/stats');
+            if (result) {
+                document.getElementById('total-rounds').textContent = result.totalRounds || 0;
+                document.getElementById('total-countries').textContent = result.totalCountries || 0;
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('log-area').innerHTML = '';
+            addLog('Log cleared');
+        }
+
+        // Check server status
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/admin/ping');
+                const indicator = document.getElementById('status-indicator');
+                const text = document.getElementById('status-text');
+                
+                if (response.ok) {
+                    indicator.className = 'status-indicator status-online';
+                    text.textContent = 'Connected';
+                    gameState.connected = true;
+                } else {
+                    throw new Error('Server error');
+                }
+            } catch {
+                const indicator = document.getElementById('status-indicator');
+                const text = document.getElementById('status-text');
+                indicator.className = 'status-indicator status-offline';
+                text.textContent = 'Disconnected';
+                gameState.connected = false;
+            }
+        }
+
+        // Initialize
+        async function init() {
+            addLog('Admin panel initialized');
+            await checkStatus();
+            await loadMusicList();
+            await loadLeaderboard();
+            await loadStats();
+            
+            // Refresh data periodically
+            setInterval(checkStatus, 5000);
+            setInterval(loadLeaderboard, 10000);
+            setInterval(loadStats, 10000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
