@@ -14,7 +14,7 @@ const CONFIG = {
         centerX: 0,
         centerY: 0,
         radius: 300,
-        thickness: 8,
+        thickness: 20,
         gapAngle: 50 * (Math.PI / 180),
         rotationSpeed: 0.02,
         color: '#000000',
@@ -30,9 +30,9 @@ const CONFIG = {
     },
     
     flag: {
-        width: 24,
-        height: 18,
-        hitboxRadius: 10
+        width: 60,
+        height: 45,
+        hitboxRadius: 25
     },
     
     game: {
