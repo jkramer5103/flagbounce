@@ -22,7 +22,7 @@ const CONFIG = {
     },
     
     physics: {
-        flagSpeed: 8,
+        flagSpeed: 10,
         gravity: 0.5,
         bounceDamping: 0.2,
         floorFriction: 0.3,
@@ -50,7 +50,12 @@ const state = {
     gamePhase: 'playing',
     winner: null,
     countries: [],
-    flagImages: {}
+    flagImages: {},
+    winnerAnimation: {
+        scale: 1,
+        scaleDirection: 1,
+        animationSpeed: 0.02
+    }
 };
 
 // Flag class - NO ROTATION, uses PNG images, CONSTANT SPEED
@@ -67,9 +72,7 @@ class Flag {
         this.isOut = false;
         this.isEliminated = false;
         this.speed = CONFIG.physics.flagSpeed;
-        this.outTime = null;
         this.opacity = 1;
-        this.hasLanded = false;
     }
     
     // Normalize velocity to constant speed
@@ -98,44 +101,14 @@ class Flag {
         }
         
         if (this.isOut) {
-            // Gravity affects fallen flags
+            // No hitbox - just fall straight down
             this.vy += CONFIG.physics.gravity;
-            this.x += this.vx;
             this.y += this.vy;
             
-            if (this.y + this.radius > CONFIG.height - 10) {
-                this.y = CONFIG.height - 10 - this.radius;
-                this.vy *= -CONFIG.physics.bounceDamping;
-                this.vx *= CONFIG.physics.floorFriction;
-                
-                // Mark as landed and start fadeout timer
-                if (!this.hasLanded) {
-                    this.hasLanded = true;
-                    this.outTime = Date.now();
-                }
-                
-                if (Math.abs(this.vy) < 1 && Math.abs(this.vx) < 0.5) {
-                    this.isEliminated = true;
-                    this.vy = 0;
-                    this.vx = 0;
-                }
-            }
-            
-            // Fade out after delay
-            if (this.outTime) {
-                const elapsed = Date.now() - this.outTime;
-                if (elapsed > CONFIG.physics.fadeOutDelay) {
-                    this.opacity = Math.max(0, 1 - (elapsed - CONFIG.physics.fadeOutDelay) / 1000);
-                }
-            }
-            
-            if (this.x - this.radius < 0) {
-                this.x = this.radius;
-                this.vx *= -1;
-            }
-            if (this.x + this.radius > CONFIG.width) {
-                this.x = CONFIG.width - this.radius;
-                this.vx *= -1;
+            // Disappear when off-screen
+            if (this.y > CONFIG.height + this.height) {
+                this.opacity = 0;
+                this.isEliminated = true;
             }
         } else {
             // Inside ring - constant speed linear movement
@@ -185,9 +158,22 @@ class Flag {
             if (this.isInGap(angle)) {
                 // EXIT THROUGH GAP!
                 this.isOut = true;
-                // Push outward in the direction of the gap
-                this.vx = Math.cos(angle) * this.speed * 4.0;
-                this.vy = Math.sin(angle) * this.speed * 4.0;
+                this.opacity = 0.5;
+                
+                // Calculate launch power based on gap position
+                // Gap at bottom (angle ~ 3π/2) = low power, Gap at top (angle ~ π/2) = high power
+                const normalizedGapAngle = (state.gapStartAngle + state.ringRotation) % (Math.PI * 2);
+                // Convert to 0-1 range where 0 = bottom, 0.5 = top
+                const gapPosition = (normalizedGapAngle + Math.PI/2) / (Math.PI * 2);
+                if (gapPosition < 0) gapPosition += 1;
+                
+                // Launch power: 0.5 (bottom) to 2.5 (top) - reduced max power
+                const launchPower = 0.5 + gapPosition * 1.3;
+                
+                // Launch in the direction the gap is pointing (outward from center through gap)
+                const gapCenterAngle = state.gapStartAngle + state.ringRotation + (CONFIG.ring.gapAngle / 2);
+                this.vx = Math.cos(gapCenterAngle) * this.speed * launchPower;
+                this.vy = Math.sin(gapCenterAngle) * this.speed * launchPower;
                 return;
             }
             
@@ -406,10 +392,11 @@ function checkWinner() {
         showWinnerAnnouncement(country);
         announceWinner(country.name);
         
+        // Auto-reset after 3.5 seconds
         setTimeout(() => {
             hideWinnerAnnouncement();
             resetGame();
-        }, CONFIG.game.resetDelay);
+        }, 3500);
     }
 }
 
@@ -419,12 +406,16 @@ function showWinnerAnnouncement(country) {
     const flagDiv = document.getElementById('winner-flag');
     const img = state.flagImages[country.code];
     if (img) {
-        flagDiv.innerHTML = `<img src="${img.src}" style="width:80px;height:60px;">`;
+        flagDiv.innerHTML = `<img src="${img.src}" style="width:200px;height:150px;">`;
     } else {
         flagDiv.textContent = country.code;
     }
-    document.getElementById('winner-text').textContent = `${country.name} wins the round!`;
+    document.getElementById('winner-text').textContent = `${country.name} wins!`;
     announcement.classList.remove('hidden');
+    
+    // Start winner animation
+    state.winnerAnimation.scale = 1;
+    state.winnerAnimation.scaleDirection = 1;
 }
 
 // Hide winner announcement
@@ -467,13 +458,12 @@ function handleFlagCollisions() {
             const a = state.flags[i];
             const b = state.flags[j];
             
-            // Skip collision if one flag is out but hasn't landed yet (falling through)
-            // This prevents exiting flags from hitting in-game flags on the way down
-            if ((a.isOut && !a.hasLanded && !b.isOut) || (b.isOut && !b.hasLanded && !a.isOut)) {
+            // Skip collisions involving out flags (no hitbox)
+            if (a.isOut || b.isOut) {
                 continue;
             }
             
-            // Skip collision between faded out flags
+            // Skip collision between fully transparent flags
             if (a.opacity <= 0 || b.opacity <= 0) {
                 continue;
             }
@@ -491,27 +481,79 @@ function gameLoop() {
     ctx.fillStyle = '#87CEEB';
     ctx.fillRect(0, 0, CONFIG.width, CONFIG.height);
     
-    // Update ring rotation
-    state.ringRotation += CONFIG.ring.rotationSpeed;
-    
-    // Draw ring FIRST
-    drawRing();
-    
-    // Update and draw flags
-    state.flags.forEach(flag => {
-        flag.update();
-        flag.draw();
-    });
-    
-    // Handle collisions
-    handleFlagCollisions();
-    
-    // Check for winner
+    // Only update ring rotation and flags if game is playing
     if (state.gamePhase === 'playing') {
+        state.ringRotation += CONFIG.ring.rotationSpeed;
+        
+        // Update and draw flags
+        state.flags.forEach(flag => {
+            flag.update();
+            flag.draw();
+        });
+        
+        // Handle collisions
+        handleFlagCollisions();
+        
+        // Check for winner
         checkWinner();
+    } else if (state.gamePhase === 'winner' && state.winner) {
+        // Draw winner animation
+        drawWinnerFlag();
     }
     
+    // Always draw ring
+    drawRing();
+    
     requestAnimationFrame(gameLoop);
+}
+
+// Draw animated winner flag
+function drawWinnerFlag() {
+    if (!state.winner) return;
+    
+    // Update animation
+    state.winnerAnimation.scale += state.winnerAnimation.scaleDirection * state.winnerAnimation.animationSpeed;
+    if (state.winnerAnimation.scale > 1.5 || state.winnerAnimation.scale < 0.8) {
+        state.winnerAnimation.scaleDirection *= -1;
+    }
+    
+    // Draw pulsing winner flag at center
+    const img = state.flagImages[state.winner.country.code];
+    const centerX = CONFIG.width / 2;
+    const centerY = CONFIG.height / 2;
+    const scaledWidth = 400 * state.winnerAnimation.scale;
+    const scaledHeight = 300 * state.winnerAnimation.scale;
+    const cornerRadius = 20 * state.winnerAnimation.scale;
+    
+    ctx.save();
+    ctx.globalAlpha = 1;
+    
+    // Create rounded rectangle clip path
+    ctx.beginPath();
+    ctx.moveTo(centerX - scaledWidth/2 + cornerRadius, centerY - scaledHeight/2);
+    ctx.lineTo(centerX + scaledWidth/2 - cornerRadius, centerY - scaledHeight/2);
+    ctx.quadraticCurveTo(centerX + scaledWidth/2, centerY - scaledHeight/2, centerX + scaledWidth/2, centerY - scaledHeight/2 + cornerRadius);
+    ctx.lineTo(centerX + scaledWidth/2, centerY + scaledHeight/2 - cornerRadius);
+    ctx.quadraticCurveTo(centerX + scaledWidth/2, centerY + scaledHeight/2, centerX + scaledWidth/2 - cornerRadius, centerY + scaledHeight/2);
+    ctx.lineTo(centerX - scaledWidth/2 + cornerRadius, centerY + scaledHeight/2);
+    ctx.quadraticCurveTo(centerX - scaledWidth/2, centerY + scaledHeight/2, centerX - scaledWidth/2, centerY + scaledHeight/2 - cornerRadius);
+    ctx.lineTo(centerX - scaledWidth/2, centerY - scaledHeight/2 + cornerRadius);
+    ctx.quadraticCurveTo(centerX - scaledWidth/2, centerY - scaledHeight/2, centerX - scaledWidth/2 + cornerRadius, centerY - scaledHeight/2);
+    ctx.closePath();
+    ctx.clip();
+    
+    if (img && img.complete) {
+        ctx.drawImage(img, centerX - scaledWidth/2, centerY - scaledHeight/2, scaledWidth, scaledHeight);
+    } else {
+        ctx.fillStyle = '#888';
+        ctx.fillRect(centerX - scaledWidth/2, centerY - scaledHeight/2, scaledWidth, scaledHeight);
+        ctx.fillStyle = '#fff';
+        ctx.font = `${60 * state.winnerAnimation.scale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(state.winner.country.code, centerX, centerY + 20 * state.winnerAnimation.scale);
+    }
+    
+    ctx.restore();
 }
 
 // Load countries and flag images
@@ -553,6 +595,15 @@ async function loadAssets() {
 async function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    
+    // Add keyboard listener for reset
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && state.gamePhase === 'winner') {
+            e.preventDefault();
+            hideWinnerAnnouncement();
+            resetGame();
+        }
+    });
     
     // Load assets first
     await loadAssets();

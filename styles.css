@@ -95,31 +95,33 @@ body {
 
 #winner-announcement {
     position: absolute;
-    top: 50%;
+    top: 75%;
     left: 50%;
     transform: translate(-50%, -50%);
     background: rgba(255, 255, 255, 0.95);
-    border-radius: 15px;
-    padding: 30px 40px;
+    border-radius: 20px;
+    padding: 40px 60px;
     text-align: center;
     color: #333;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
     z-index: 100;
 }
 
 #winner-flag {
-    margin-bottom: 15px;
+    margin-bottom: 25px;
 }
 
 #winner-flag img {
-    width: 60px;
-    height: 40px;
+    width: 400px;
+    height: 300px;
+    border-radius: 20px;
 }
 
 #winner-text {
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-size: 3rem;
+    font-weight: 700;
     color: #333;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .hidden {
