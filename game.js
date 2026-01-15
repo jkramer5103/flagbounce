@@ -390,7 +390,7 @@ function checkWinner() {
         updateLeaderboard();
         
         showWinnerAnnouncement(country);
-        announceWinner(country.name);
+        announceWinner(country);
         
         // Auto-reset after 3.5 seconds
         setTimeout(() => {
@@ -423,24 +423,33 @@ function hideWinnerAnnouncement() {
     document.getElementById('winner-announcement').classList.add('hidden');
 }
 
-// TTS announcement using Web Speech API
-function announceWinner(countryName) {
-    if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(`${countryName} wins the round!`);
-        utterance.rate = 0.9;
-        utterance.pitch = 1.1;
-        utterance.volume = 1;
-        
-        // Find an English voice
-        const voices = speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith('en-')) || 
-                            voices.find(v => v.lang.includes('en'));
-        if (englishVoice) {
-            utterance.voice = englishVoice;
+// TTS announcement using pre-recorded audio files
+function announceWinner(country) {
+    const audioPath = `assets/tts/${country.code}.mp3`;
+    
+    // Create and play the audio
+    const audio = new Audio(audioPath);
+    audio.volume = 1.0;
+    
+    audio.play().catch(error => {
+        console.warn(`Failed to play TTS audio for ${country.code}:`, error);
+        // Fallback to Web Speech API if audio file fails
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(`${country.name} wins the round!`);
+            utterance.rate = 0.9;
+            utterance.pitch = 1.1;
+            utterance.volume = 1;
+            
+            const voices = speechSynthesis.getVoices();
+            const englishVoice = voices.find(v => v.lang.startsWith('en-')) || 
+                                voices.find(v => v.lang.includes('en'));
+            if (englishVoice) {
+                utterance.voice = englishVoice;
+            }
+            
+            speechSynthesis.speak(utterance);
         }
-        
-        speechSynthesis.speak(utterance);
-    }
+    });
 }
 
 // Reset game
