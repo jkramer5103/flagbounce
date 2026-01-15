@@ -44,8 +44,8 @@ body {
 
 #leaderboard h2 {
     text-align: left;
-    margin-bottom: 12px;
-    font-size: 1.4rem;
+    margin-bottom: 15px;
+    font-size: 1.8rem;
     font-weight: 600;
     color: #333;
 }
@@ -58,37 +58,39 @@ body {
 #leaderboard-list li {
     display: flex;
     align-items: center;
-    padding: 8px 0;
+    padding: 10px 0;
     counter-increment: leaderboard;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
 }
 
 #leaderboard-list li::before {
     content: counter(leaderboard) ".";
-    font-weight: normal;
-    margin-right: 12px;
+    font-weight: 600;
+    margin-right: 15px;
     color: #333;
-    min-width: 30px;
+    min-width: 35px;
+    font-size: 1.5rem;
 }
 
 .leaderboard-flag {
-    width: 36px;
-    height: 24px;
-    margin-right: 12px;
+    width: 45px;
+    height: 30px;
+    margin-right: 15px;
     object-fit: cover;
+    border-radius: 4px;
 }
 
 .leaderboard-name {
     flex: 1;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     color: #333;
 }
 
 .leaderboard-wins {
-    font-weight: normal;
+    font-weight: 600;
     color: #333;
-    font-size: 1.2rem;
-    margin-left: 20px;
+    font-size: 1.5rem;
+    margin-left: 25px;
 }
 
 #winner-announcement {

@@ -22,11 +22,12 @@ const CONFIG = {
     },
     
     physics: {
-        flagSpeed: 5, // Faster flags
+        flagSpeed: 8,
         gravity: 0.5,
-        bounceDamping: 0.7,
-        floorFriction: 0.8,
-        stackingDamping: 0.5
+        bounceDamping: 0.2,
+        floorFriction: 0.3,
+        stackingDamping: 0.1,
+        fadeOutDelay: 5000
     },
     
     flag: {
@@ -65,7 +66,10 @@ class Flag {
         this.height = CONFIG.flag.height;
         this.isOut = false;
         this.isEliminated = false;
-        this.speed = CONFIG.physics.flagSpeed; // Store constant speed
+        this.speed = CONFIG.physics.flagSpeed;
+        this.outTime = null;
+        this.opacity = 1;
+        this.hasLanded = false;
     }
     
     // Normalize velocity to constant speed
@@ -103,10 +107,25 @@ class Flag {
                 this.y = CONFIG.height - 10 - this.radius;
                 this.vy *= -CONFIG.physics.bounceDamping;
                 this.vx *= CONFIG.physics.floorFriction;
+                
+                // Mark as landed and start fadeout timer
+                if (!this.hasLanded) {
+                    this.hasLanded = true;
+                    this.outTime = Date.now();
+                }
+                
                 if (Math.abs(this.vy) < 1 && Math.abs(this.vx) < 0.5) {
                     this.isEliminated = true;
                     this.vy = 0;
                     this.vx = 0;
+                }
+            }
+            
+            // Fade out after delay
+            if (this.outTime) {
+                const elapsed = Date.now() - this.outTime;
+                if (elapsed > CONFIG.physics.fadeOutDelay) {
+                    this.opacity = Math.max(0, 1 - (elapsed - CONFIG.physics.fadeOutDelay) / 1000);
                 }
             }
             
@@ -167,8 +186,8 @@ class Flag {
                 // EXIT THROUGH GAP!
                 this.isOut = true;
                 // Push outward in the direction of the gap
-                this.vx = Math.cos(angle) * this.speed * 1.5;
-                this.vy = Math.sin(angle) * this.speed * 1.5;
+                this.vx = Math.cos(angle) * this.speed * 4.0;
+                this.vy = Math.sin(angle) * this.speed * 4.0;
                 return;
             }
             
@@ -193,17 +212,42 @@ class Flag {
     }
     
     draw() {
+        if (this.opacity <= 0) return;
+        
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+        
         const img = state.flagImages[this.country.code];
+        const x = this.x - this.width/2;
+        const y = this.y - this.height/2;
+        const cornerRadius = 6;
+        
+        // Create rounded rectangle clip path
+        ctx.beginPath();
+        ctx.moveTo(x + cornerRadius, y);
+        ctx.lineTo(x + this.width - cornerRadius, y);
+        ctx.quadraticCurveTo(x + this.width, y, x + this.width, y + cornerRadius);
+        ctx.lineTo(x + this.width, y + this.height - cornerRadius);
+        ctx.quadraticCurveTo(x + this.width, y + this.height, x + this.width - cornerRadius, y + this.height);
+        ctx.lineTo(x + cornerRadius, y + this.height);
+        ctx.quadraticCurveTo(x, y + this.height, x, y + this.height - cornerRadius);
+        ctx.lineTo(x, y + cornerRadius);
+        ctx.quadraticCurveTo(x, y, x + cornerRadius, y);
+        ctx.closePath();
+        ctx.clip();
+        
         if (img && img.complete) {
-            ctx.drawImage(img, this.x - this.width/2, this.y - this.height/2, this.width, this.height);
+            ctx.drawImage(img, x, y, this.width, this.height);
         } else {
             ctx.fillStyle = '#888';
-            ctx.fillRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height);
+            ctx.fillRect(x, y, this.width, this.height);
             ctx.fillStyle = '#fff';
             ctx.font = '10px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(this.country.code, this.x, this.y + 3);
         }
+        
+        ctx.restore();
     }
     
     checkCollisionWith(other) {
@@ -264,7 +308,7 @@ function resizeCanvas() {
     CONFIG.height = 1920;
     
     CONFIG.ring.centerX = 540;
-    CONFIG.ring.centerY = 620;
+    CONFIG.ring.centerY = 750;
     CONFIG.ring.radius = 400;
 }
 
@@ -326,7 +370,7 @@ function updateLeaderboard() {
     
     const sorted = Object.entries(state.leaderboard)
         .sort((a, b) => b[1].wins - a[1].wins)
-        .slice(0, 10);
+        .slice(0, 3);
     
     sorted.forEach(([code, data]) => {
         const li = document.createElement('li');
@@ -395,6 +439,15 @@ function announceWinner(countryName) {
         utterance.rate = 0.9;
         utterance.pitch = 1.1;
         utterance.volume = 1;
+        
+        // Find an English voice
+        const voices = speechSynthesis.getVoices();
+        const englishVoice = voices.find(v => v.lang.startsWith('en-')) || 
+                            voices.find(v => v.lang.includes('en'));
+        if (englishVoice) {
+            utterance.voice = englishVoice;
+        }
+        
         speechSynthesis.speak(utterance);
     }
 }
@@ -413,6 +466,17 @@ function handleFlagCollisions() {
         for (let j = i + 1; j < state.flags.length; j++) {
             const a = state.flags[i];
             const b = state.flags[j];
+            
+            // Skip collision if one flag is out but hasn't landed yet (falling through)
+            // This prevents exiting flags from hitting in-game flags on the way down
+            if ((a.isOut && !a.hasLanded && !b.isOut) || (b.isOut && !b.hasLanded && !a.isOut)) {
+                continue;
+            }
+            
+            // Skip collision between faded out flags
+            if (a.opacity <= 0 || b.opacity <= 0) {
+                continue;
+            }
             
             if (a.checkCollisionWith(b)) {
                 a.resolveCollisionWith(b);
