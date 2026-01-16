@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  flagbounce:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flagbounce-app
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount assets folder for easy updates without rebuilding
+      - ./assets:/app/assets:ro
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/admin/ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

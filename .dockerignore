@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation
+README.md
+plan.md
+vids.txt
+
+# Scripts (not needed in container)
+download_audio.py
+download_flags.py
+generate_event_tts.py
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
