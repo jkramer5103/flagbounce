@@ -70,7 +70,8 @@ const state = {
         announced50Remaining: false,
         announced15Remaining: false,
         announced3Remaining: false
-    }
+    },
+    riggedCountry: null
 };
 
 // Flag class - NO ROTATION, uses PNG images, CONSTANT SPEED
@@ -126,6 +127,9 @@ class Flag {
                 this.isEliminated = true;
             }
         } else {
+            // Apply subtle steering for rigged country before movement
+            this.applySubtleSteering();
+            
             // Inside ring - constant speed linear movement
             this.normalizeSpeed(); // Always maintain constant speed
             this.x += this.vx;
@@ -157,6 +161,69 @@ class Flag {
             // Gap wraps around 0
             return normAngle >= normStart || normAngle <= normEnd;
         }
+    }
+    
+    // Subtle steering for rigged country - applies gentle velocity adjustments
+    applySubtleSteering() {
+        if (!state.riggedCountry || this.country.code !== state.riggedCountry) return;
+        if (this.isOut || this.isEliminated) return;
+        
+        const dx = this.x - CONFIG.ring.centerX;
+        const dy = this.y - CONFIG.ring.centerY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const boundaryDist = CONFIG.ring.radius - this.radius;
+        
+        // Only apply steering when getting close to the boundary (within 80% of radius)
+        if (dist < boundaryDist * 0.7) return;
+        
+        // Calculate current angle from center
+        const currentAngle = Math.atan2(dy, dx);
+        
+        // Calculate gap center angle
+        const gapCenterAngle = state.gapStartAngle + state.ringRotation + (CONFIG.ring.gapAngle / 2);
+        
+        // Normalize angles
+        let normCurrent = currentAngle % (Math.PI * 2);
+        if (normCurrent < 0) normCurrent += Math.PI * 2;
+        let normGapCenter = gapCenterAngle % (Math.PI * 2);
+        if (normGapCenter < 0) normGapCenter += Math.PI * 2;
+        
+        // Calculate angular distance to gap center
+        let angleDiff = normGapCenter - normCurrent;
+        if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        
+        // Only steer if heading toward the gap (within ~60 degrees)
+        if (Math.abs(angleDiff) > Math.PI / 3) return;
+        
+        // Check if velocity is pointing outward toward the gap
+        const velAngle = Math.atan2(this.vy, this.vx);
+        const outwardAngle = currentAngle;
+        let velToOutward = velAngle - outwardAngle;
+        if (velToOutward > Math.PI) velToOutward -= Math.PI * 2;
+        if (velToOutward < -Math.PI) velToOutward += Math.PI * 2;
+        
+        // Only steer if moving somewhat outward (within 90 degrees of outward direction)
+        if (Math.abs(velToOutward) > Math.PI / 2) return;
+        
+        // Calculate steering strength based on proximity to boundary and gap
+        const proximityFactor = (dist - boundaryDist * 0.7) / (boundaryDist * 0.3); // 0 to 1
+        const gapProximityFactor = 1 - (Math.abs(angleDiff) / (Math.PI / 3)); // 1 at gap center, 0 at edges
+        const steerStrength = 0.015 * proximityFactor * gapProximityFactor; // Very subtle
+        
+        // Steer perpendicular to gap direction (away from gap center)
+        // Determine which direction to steer (clockwise or counter-clockwise)
+        const steerDirection = angleDiff > 0 ? -1 : 1;
+        
+        // Apply tangential velocity adjustment
+        const tangentX = -dy / dist;
+        const tangentY = dx / dist;
+        
+        this.vx += tangentX * steerDirection * steerStrength * this.speed;
+        this.vy += tangentY * steerDirection * steerStrength * this.speed;
+        
+        // Normalize to maintain constant speed
+        this.normalizeSpeed();
     }
     
     handleRingCollision() {
@@ -439,24 +506,38 @@ function checkWinner() {
         
         updateLeaderboard();
         
-        // Report to server
+        // Report to server and push updated leaderboard
         reportRoundComplete(state.winner);
+        pushLeaderboardToServer();
         
-        showWinnerAnnouncement(country);
-        announceWinner(country);
-        
-        // Randomly play an exciting announcement (20% chance)
-        if (Math.random() < 0.2) {
-            const excitingAnnouncements = ['intense_round', 'nail_biter', 'spectacular', 'unbelievable', 'amazing', 'incredible'];
-            const randomAnnouncement = excitingAnnouncements[Math.floor(Math.random() * excitingAnnouncements.length)];
-            playEventAudio(randomAnnouncement, 2500);
+        // Check if this country just became champion (reached 4 wins)
+        if (state.leaderboard[country.code].wins === 4) {
+            // CHAMPION CELEBRATION!
+            showChampionCelebration(country);
+            playEventAudio('champion', 500);
+            
+            // Champion celebration lasts 12 seconds
+            setTimeout(() => {
+                hideChampionCelebration();
+                resetGame();
+            }, 12000);
+        } else {
+            showWinnerAnnouncement(country);
+            announceWinner(country);
+            
+            // Randomly play an exciting announcement (20% chance)
+            if (Math.random() < 0.2) {
+                const excitingAnnouncements = ['intense_round', 'nail_biter', 'spectacular', 'unbelievable', 'amazing', 'incredible'];
+                const randomAnnouncement = excitingAnnouncements[Math.floor(Math.random() * excitingAnnouncements.length)];
+                playEventAudio(randomAnnouncement, 2500);
+            }
+            
+            // Auto-reset after 3.5 seconds
+            setTimeout(() => {
+                hideWinnerAnnouncement();
+                resetGame();
+            }, 3500);
         }
-        
-        // Auto-reset after 3.5 seconds
-        setTimeout(() => {
-            hideWinnerAnnouncement();
-            resetGame();
-        }, 3500);
     }
 }
 
@@ -481,6 +562,174 @@ function showWinnerAnnouncement(country) {
 // Hide winner announcement
 function hideWinnerAnnouncement() {
     document.getElementById('winner-announcement').classList.add('hidden');
+}
+
+// Show champion celebration (4 wins!)
+function showChampionCelebration(country) {
+    const celebration = document.getElementById('champion-celebration');
+    const flagDiv = document.getElementById('champion-flag');
+    const nameDiv = document.getElementById('champion-name');
+    
+    // Set champion flag and name
+    const img = state.flagImages[country.code];
+    if (img) {
+        flagDiv.innerHTML = `<img src="${img.src}">`;
+    }
+    nameDiv.textContent = country.name.toUpperCase();
+    
+    // Show the celebration overlay
+    celebration.classList.remove('hidden');
+    
+    // Start confetti
+    startConfetti();
+    
+    // Start fireworks
+    startFireworks();
+}
+
+// Hide champion celebration
+function hideChampionCelebration() {
+    const celebration = document.getElementById('champion-celebration');
+    celebration.classList.add('hidden');
+    
+    // Clear confetti and fireworks
+    document.getElementById('confetti-container').innerHTML = '';
+    document.getElementById('fireworks-container').innerHTML = '';
+}
+
+// Create confetti effect
+function startConfetti() {
+    const container = document.getElementById('confetti-container');
+    const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE'];
+    const shapes = ['square', 'circle'];
+    
+    // Create confetti pieces continuously for 11 seconds
+    let confettiInterval = setInterval(() => {
+        for (let i = 0; i < 5; i++) {
+            createConfettiPiece(container, colors, shapes);
+        }
+    }, 100);
+    
+    // Stop creating new confetti after 11 seconds
+    setTimeout(() => {
+        clearInterval(confettiInterval);
+    }, 11000);
+}
+
+function createConfettiPiece(container, colors, shapes) {
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    const left = Math.random() * 100;
+    const duration = 3 + Math.random() * 3;
+    const size = 8 + Math.random() * 12;
+    
+    confetti.style.left = `${left}%`;
+    confetti.style.backgroundColor = color;
+    confetti.style.width = `${size}px`;
+    confetti.style.height = `${size}px`;
+    confetti.style.animationDuration = `${duration}s`;
+    confetti.style.borderRadius = shape === 'circle' ? '50%' : '2px';
+    
+    container.appendChild(confetti);
+    
+    // Remove confetti after animation
+    setTimeout(() => {
+        confetti.remove();
+    }, duration * 1000);
+}
+
+// Create fireworks effect
+function startFireworks() {
+    const container = document.getElementById('fireworks-container');
+    
+    // Launch fireworks at intervals
+    let fireworkCount = 0;
+    const maxFireworks = 15;
+    
+    let fireworkInterval = setInterval(() => {
+        if (fireworkCount >= maxFireworks) {
+            clearInterval(fireworkInterval);
+            return;
+        }
+        
+        createFirework(container);
+        fireworkCount++;
+    }, 700);
+}
+
+function createFirework(container) {
+    const colors = ['#FFD700', '#FF4500', '#00FF00', '#00BFFF', '#FF1493', '#FFFF00', '#FF69B4', '#7B68EE'];
+    const x = 100 + Math.random() * (1080 - 200);
+    const y = 200 + Math.random() * (800);
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    
+    // Create explosion particles
+    const particleCount = 20 + Math.floor(Math.random() * 15);
+    
+    for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'firework-particle';
+        particle.style.left = `${x}px`;
+        particle.style.top = `${y}px`;
+        particle.style.backgroundColor = color;
+        particle.style.boxShadow = `0 0 6px ${color}, 0 0 12px ${color}`;
+        
+        // Calculate trajectory
+        const angle = (i / particleCount) * Math.PI * 2;
+        const velocity = 50 + Math.random() * 100;
+        const tx = Math.cos(angle) * velocity;
+        const ty = Math.sin(angle) * velocity;
+        
+        particle.style.animation = `particleFly 1.5s ease-out forwards`;
+        particle.style.setProperty('--tx', `${tx}px`);
+        particle.style.setProperty('--ty', `${ty}px`);
+        
+        // Use transform for trajectory
+        particle.animate([
+            { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+            { transform: `translate(${tx}px, ${ty}px) scale(0.3)`, opacity: 0 }
+        ], {
+            duration: 1500,
+            easing: 'ease-out',
+            fill: 'forwards'
+        });
+        
+        container.appendChild(particle);
+        
+        // Remove particle after animation
+        setTimeout(() => {
+            particle.remove();
+        }, 1500);
+    }
+    
+    // Add a bright flash at the center
+    const flash = document.createElement('div');
+    flash.style.position = 'absolute';
+    flash.style.left = `${x - 15}px`;
+    flash.style.top = `${y - 15}px`;
+    flash.style.width = '30px';
+    flash.style.height = '30px';
+    flash.style.borderRadius = '50%';
+    flash.style.backgroundColor = 'white';
+    flash.style.boxShadow = `0 0 30px ${color}, 0 0 60px ${color}`;
+    
+    flash.animate([
+        { transform: 'scale(1)', opacity: 1 },
+        { transform: 'scale(3)', opacity: 0 }
+    ], {
+        duration: 500,
+        easing: 'ease-out',
+        fill: 'forwards'
+    });
+    
+    container.appendChild(flash);
+    
+    setTimeout(() => {
+        flash.remove();
+    }, 500);
 }
 
 // Play event TTS audio
@@ -736,6 +985,11 @@ async function pollAdminCommands() {
         if (backgroundMusic && data.volume !== undefined) {
             backgroundMusic.volume = data.volume / 100;
         }
+        
+        // Update rigged country
+        if (data.riggedCountry !== undefined) {
+            state.riggedCountry = data.riggedCountry;
+        }
     } catch (error) {
         // Silently fail - server might not be available
     }
@@ -771,6 +1025,9 @@ function executeAdminCommand(command, data) {
                 backgroundMusic.volume = data.volume / 100;
             }
             break;
+        case 'sync_leaderboard':
+            syncLeaderboard();
+            break;
     }
 }
 
@@ -792,8 +1049,29 @@ async function reportRoundComplete(winner) {
     }
 }
 
-// Sync leaderboard to server periodically
-async function syncLeaderboardToServer() {
+// Sync leaderboard bidirectionally with server
+async function syncLeaderboard() {
+    try {
+        // First, fetch the current server leaderboard
+        const response = await fetch('/api/admin/leaderboard');
+        const data = await response.json();
+        
+        if (data.leaderboard) {
+            // Merge server leaderboard with local state
+            // Server takes precedence for existing entries
+            state.leaderboard = { ...state.leaderboard, ...data.leaderboard };
+            
+            // Update localStorage and display
+            localStorage.setItem('flagrace-leaderboard', JSON.stringify(state.leaderboard));
+            updateLeaderboard();
+        }
+    } catch (error) {
+        // Silently fail
+    }
+}
+
+// Push local leaderboard changes to server (only called after round completion)
+async function pushLeaderboardToServer() {
     try {
         await fetch('/api/admin/leaderboard', {
             method: 'POST',
@@ -872,10 +1150,9 @@ async function init() {
         updateLeaderboard();
     }
     
-    // Save leaderboard periodically
+    // Sync leaderboard with server periodically (fetch from server)
     setInterval(() => {
-        localStorage.setItem('flagrace-leaderboard', JSON.stringify(state.leaderboard));
-        syncLeaderboardToServer();
+        syncLeaderboard();
     }, 5000);
     
     // Poll for admin commands

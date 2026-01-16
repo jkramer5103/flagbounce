@@ -15,7 +15,8 @@ game_state = {
     'volume': 30,
     'music_playing': True,
     'total_rounds': 0,
-    'leaderboard': {}
+    'leaderboard': {},
+    'rigged_country': None  # Country code that will be guaranteed to win
 }
 
 @app.route('/api/music', methods=['GET'])
@@ -100,6 +101,37 @@ def admin_update_leaderboard():
         return jsonify({'success': True})
     return jsonify({'success': False}), 400
 
+@app.route('/api/admin/leaderboard/update', methods=['POST'])
+def admin_update_score():
+    """Update a specific country's score"""
+    data = request.get_json()
+    if data and 'code' in data and 'wins' in data:
+        code = data['code']
+        wins = int(data['wins'])
+        
+        if code in game_state['leaderboard']:
+            game_state['leaderboard'][code]['wins'] = wins
+            game_state['command'] = 'sync_leaderboard'
+            return jsonify({'success': True, 'message': f'Updated {code} to {wins} wins'})
+        else:
+            return jsonify({'success': False, 'error': 'Country not found in leaderboard'}), 404
+    return jsonify({'success': False, 'error': 'Invalid data'}), 400
+
+@app.route('/api/admin/leaderboard/delete', methods=['POST'])
+def admin_delete_score():
+    """Delete a specific country from the leaderboard"""
+    data = request.get_json()
+    if data and 'code' in data:
+        code = data['code']
+        
+        if code in game_state['leaderboard']:
+            del game_state['leaderboard'][code]
+            game_state['command'] = 'sync_leaderboard'
+            return jsonify({'success': True, 'message': f'Deleted {code} from leaderboard'})
+        else:
+            return jsonify({'success': False, 'error': 'Country not found in leaderboard'}), 404
+    return jsonify({'success': False, 'error': 'Invalid data'}), 400
+
 @app.route('/api/admin/stats', methods=['GET'])
 def admin_get_stats():
     """Get game statistics"""
@@ -129,8 +161,23 @@ def admin_get_command():
     return jsonify({
         'command': command,
         'volume': volume,
-        'musicPlaying': game_state['music_playing']
+        'musicPlaying': game_state['music_playing'],
+        'riggedCountry': game_state['rigged_country']
     })
+
+@app.route('/api/admin/rig', methods=['POST'])
+def admin_set_rigged():
+    """Set a country to be guaranteed winner"""
+    data = request.get_json()
+    if data and 'code' in data:
+        game_state['rigged_country'] = data['code'] if data['code'] else None
+        return jsonify({'success': True, 'riggedCountry': game_state['rigged_country']})
+    return jsonify({'success': False, 'error': 'Country code not provided'}), 400
+
+@app.route('/api/admin/rig', methods=['GET'])
+def admin_get_rigged():
+    """Get current rigged country"""
+    return jsonify({'riggedCountry': game_state['rigged_country']})
 
 @app.route('/api/admin/round-complete', methods=['POST'])
 def admin_round_complete():

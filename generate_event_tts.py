@@ -26,6 +26,9 @@ def generate_event_tts():
         "unbelievable": "Unbelievable!",
         "amazing": "Amazing!",
         "incredible": "Incredible victory!",
+        
+        # Champion celebration (4 wins)
+        "champion": "We have a champion! 4 victories! Absolutely dominant performance! This country has proven themselves the ultimate champion!",
     }
     
     print(f"Generating {len(events)} TTS audio files...")

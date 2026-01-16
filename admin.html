@@ -290,6 +290,165 @@
         .toast.success {
             background: rgba(56, 239, 125, 0.9);
         }
+
+        .leaderboard-actions {
+            display: flex;
+            gap: 5px;
+            margin-left: 10px;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            width: auto;
+            min-width: 60px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-header h3 {
+            color: #a0a0ff;
+            font-size: 1.5rem;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            color: #f5576c;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #a0a0ff;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        .country-dropdown {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .country-dropdown.show {
+            display: block;
+        }
+
+        .country-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .country-item:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        .country-item.selected {
+            background: rgba(102, 126, 234, 0.5);
+        }
+
+        .country-item img {
+            width: 30px;
+            height: 22px;
+            border-radius: 3px;
+            margin-right: 10px;
+            object-fit: cover;
+        }
+
+        .boost-active {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .boost-active img {
+            width: 40px;
+            height: 30px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+
+        .boost-active .country-name {
+            color: #38ef7d;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -303,6 +462,21 @@
                 <button class="btn btn-danger" onclick="resetGame()">Reset Current Round</button>
                 <button class="btn btn-warning" onclick="clearLeaderboard()">Clear Leaderboard</button>
                 <button class="btn btn-primary" onclick="forceNewRound()">Force New Round</button>
+            </div>
+
+            <!-- Special Controls -->
+            <div class="panel">
+                <h2>🎲 Luck Boost</h2>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>Select Country</label>
+                    <input type="text" id="boost-search" placeholder="Search country..." oninput="filterCountries(this.value)" autocomplete="off">
+                    <div class="country-dropdown" id="country-dropdown"></div>
+                </div>
+                <div id="boost-status" style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <span style="color: #888;">No boost active</span>
+                </div>
+                <button class="btn btn-success" id="boost-btn" onclick="setBoost()" disabled>Apply Boost</button>
+                <button class="btn btn-danger" onclick="clearBoost()">Clear Boost</button>
             </div>
 
             <!-- Server Status -->
@@ -364,6 +538,28 @@
 
     <div class="toast" id="toast"></div>
 
+    <!-- Edit Score Modal -->
+    <div class="modal" id="edit-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Score</h3>
+                <button class="modal-close" onclick="closeEditModal()">×</button>
+            </div>
+            <div class="form-group">
+                <label>Country</label>
+                <input type="text" id="edit-country-name" readonly>
+            </div>
+            <div class="form-group">
+                <label>Wins</label>
+                <input type="number" id="edit-wins" min="0" step="1">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-success" onclick="saveScore()">Save Changes</button>
+                <button class="btn btn-danger" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // State
         let gameState = {
@@ -371,6 +567,10 @@
             musicPlaying: false,
             volume: 30
         };
+
+        // Countries data and boost state
+        let allCountries = [];
+        let selectedBoostCountry = null;
 
         // Show toast notification
         function showToast(message, type = 'info') {
@@ -499,6 +699,10 @@
                         <img class="leaderboard-flag" src="assets/${code}.png" alt="${code}">
                         <span class="leaderboard-name">${data.name}</span>
                         <span class="leaderboard-wins">${data.wins} wins</span>
+                        <div class="leaderboard-actions">
+                            <button class="btn btn-primary btn-small" onclick="editScore('${code}', '${data.name}', ${data.wins})">Edit</button>
+                            <button class="btn btn-danger btn-small" onclick="deleteScore('${code}', '${data.name}')">Delete</button>
+                        </div>
                     </div>
                 `).join('');
             }
@@ -515,6 +719,62 @@
         function clearLog() {
             document.getElementById('log-area').innerHTML = '';
             addLog('Log cleared');
+        }
+
+        // Leaderboard modification functions
+        let currentEditCode = null;
+
+        function editScore(code, name, wins) {
+            currentEditCode = code;
+            document.getElementById('edit-country-name').value = name;
+            document.getElementById('edit-wins').value = wins;
+            document.getElementById('edit-modal').classList.add('show');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.remove('show');
+            currentEditCode = null;
+        }
+
+        async function saveScore() {
+            const wins = parseInt(document.getElementById('edit-wins').value);
+            
+            if (wins < 0 || isNaN(wins)) {
+                showToast('Please enter a valid number of wins', 'error');
+                return;
+            }
+
+            const result = await apiCall('/api/admin/leaderboard/update', 'POST', {
+                code: currentEditCode,
+                wins: wins
+            });
+
+            if (result && result.success) {
+                showToast('Score updated successfully!', 'success');
+                addLog(`Updated ${currentEditCode} score to ${wins} wins`);
+                closeEditModal();
+                await loadLeaderboard();
+            } else {
+                showToast('Failed to update score', 'error');
+            }
+        }
+
+        async function deleteScore(code, name) {
+            if (!confirm(`Are you sure you want to delete ${name} from the leaderboard?`)) {
+                return;
+            }
+
+            const result = await apiCall('/api/admin/leaderboard/delete', 'POST', {
+                code: code
+            });
+
+            if (result && result.success) {
+                showToast('Score deleted successfully!', 'success');
+                addLog(`Deleted ${name} from leaderboard`);
+                await loadLeaderboard();
+            } else {
+                showToast('Failed to delete score', 'error');
+            }
         }
 
         // Check server status
@@ -540,18 +800,133 @@
             }
         }
 
+        // Load countries for boost selector
+        async function loadCountries() {
+            try {
+                const response = await fetch('assets/countries.json');
+                const data = await response.json();
+                allCountries = Object.entries(data).map(([code, name]) => ({ code, name }));
+                allCountries.sort((a, b) => a.name.localeCompare(b.name));
+            } catch (error) {
+                console.error('Failed to load countries:', error);
+            }
+        }
+
+        // Filter and display countries in dropdown
+        function filterCountries(query) {
+            const dropdown = document.getElementById('country-dropdown');
+            
+            if (!query || query.length < 1) {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            const filtered = allCountries.filter(c => 
+                c.name.toLowerCase().includes(query.toLowerCase()) ||
+                c.code.toLowerCase().includes(query.toLowerCase())
+            ).slice(0, 10);
+
+            if (filtered.length === 0) {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            dropdown.innerHTML = filtered.map(c => `
+                <div class="country-item" onclick="selectCountry('${c.code}', '${c.name.replace(/'/g, "\\'")}')">
+                    <img src="assets/${c.code}.png" alt="${c.code}">
+                    <span>${c.name}</span>
+                </div>
+            `).join('');
+            dropdown.classList.add('show');
+        }
+
+        // Select a country for boost
+        function selectCountry(code, name) {
+            selectedBoostCountry = { code, name };
+            document.getElementById('boost-search').value = name;
+            document.getElementById('country-dropdown').classList.remove('show');
+            document.getElementById('boost-btn').disabled = false;
+        }
+
+        // Apply boost to selected country
+        async function setBoost() {
+            if (!selectedBoostCountry) return;
+
+            const result = await apiCall('/api/admin/rig', 'POST', { code: selectedBoostCountry.code });
+            if (result && result.success) {
+                showToast(`Boost applied to ${selectedBoostCountry.name}`, 'success');
+                addLog(`Boost activated for ${selectedBoostCountry.name}`);
+                updateBoostStatus(selectedBoostCountry.code, selectedBoostCountry.name);
+                document.getElementById('boost-search').value = '';
+                document.getElementById('boost-btn').disabled = true;
+                selectedBoostCountry = null;
+            } else {
+                showToast('Failed to apply boost', 'error');
+            }
+        }
+
+        // Clear boost
+        async function clearBoost() {
+            const result = await apiCall('/api/admin/rig', 'POST', { code: null });
+            if (result && result.success) {
+                showToast('Boost cleared', 'success');
+                addLog('Boost deactivated');
+                updateBoostStatus(null);
+            } else {
+                showToast('Failed to clear boost', 'error');
+            }
+        }
+
+        // Update boost status display
+        function updateBoostStatus(code, name = null) {
+            const status = document.getElementById('boost-status');
+            if (code && name) {
+                status.innerHTML = `
+                    <div class="boost-active">
+                        <img src="assets/${code}.png" alt="${code}">
+                        <span class="country-name">${name}</span>
+                        <span style="color: #888; margin-left: auto;">Active</span>
+                    </div>
+                `;
+            } else if (code) {
+                const country = allCountries.find(c => c.code === code);
+                if (country) {
+                    status.innerHTML = `
+                        <div class="boost-active">
+                            <img src="assets/${code}.png" alt="${code}">
+                            <span class="country-name">${country.name}</span>
+                            <span style="color: #888; margin-left: auto;">Active</span>
+                        </div>
+                    `;
+                }
+            } else {
+                status.innerHTML = '<span style="color: #888;">No boost active</span>';
+            }
+        }
+
+        // Load current boost status
+        async function loadBoostStatus() {
+            const result = await apiCall('/api/admin/rig', 'GET');
+            if (result && result.riggedCountry) {
+                updateBoostStatus(result.riggedCountry);
+            }
+        }
+
         // Initialize
         async function init() {
             addLog('Admin panel initialized');
             await checkStatus();
+            await loadCountries();
             await loadMusicList();
             await loadLeaderboard();
             await loadStats();
+            await loadBoostStatus();
             
             // Refresh data periodically
             setInterval(checkStatus, 5000);
             setInterval(loadLeaderboard, 10000);
             setInterval(loadStats, 10000);
+            setInterval(loadBoostStatus, 5000);
         }
 
         init();
