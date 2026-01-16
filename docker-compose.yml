@@ -6,8 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: flagbounce-app
-    ports:
-      - "5000:5000"
+#    ports:
+#      - "5000:5000" For Coolify
     volumes:
       # Mount assets folder for easy updates without rebuilding
       - ./assets:/app/assets:ro
