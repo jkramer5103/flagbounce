@@ -155,15 +155,46 @@ class Flag {
         if (normEnd < 0) normEnd += Math.PI * 2;
         
         // Check if angle is between start and end
+        let inGap;
         if (normStart < normEnd) {
-            return normAngle >= normStart && normAngle <= normEnd;
+            inGap = normAngle >= normStart && normAngle <= normEnd;
         } else {
             // Gap wraps around 0
-            return normAngle >= normStart || normAngle <= normEnd;
+            inGap = normAngle >= normStart || normAngle <= normEnd;
         }
+        
+        // Safety check for rigged country: if about to exit through gap,
+        // pretend we're at the edge of the gap (not in it) so we bounce instead
+        // This only triggers as a last resort when steering wasn't enough
+        if (inGap && state.riggedCountry && this.country.code === state.riggedCountry) {
+            // Deflect velocity toward the nearest gap edge instead of exiting
+            const gapEdgeMargin = CONFIG.ring.gapAngle * 0.15; // 15% from edge
+            let normGapStart = normStart;
+            let normGapEnd = normEnd;
+            
+            // Find which edge is closer
+            let distToStart = Math.abs(normAngle - normGapStart);
+            if (distToStart > Math.PI) distToStart = Math.PI * 2 - distToStart;
+            let distToEnd = Math.abs(normAngle - normGapEnd);
+            if (distToEnd > Math.PI) distToEnd = Math.PI * 2 - distToEnd;
+            
+            // Redirect velocity to bounce off the closer edge
+            const edgeAngle = distToStart < distToEnd ? normGapStart - gapEdgeMargin : normGapEnd + gapEdgeMargin;
+            const dx = this.x - CONFIG.ring.centerX;
+            const dy = this.y - CONFIG.ring.centerY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            // Push position to the edge
+            this.x = CONFIG.ring.centerX + Math.cos(edgeAngle) * (dist - 2);
+            this.y = CONFIG.ring.centerY + Math.sin(edgeAngle) * (dist - 2);
+            
+            return false; // Bounce off instead of exiting
+        }
+        
+        return inGap;
     }
     
-    // Subtle steering for rigged country - applies gentle velocity adjustments
+    // Subtle steering for rigged country - applies velocity adjustments to avoid gap
     applySubtleSteering() {
         if (!state.riggedCountry || this.country.code !== state.riggedCountry) return;
         if (this.isOut || this.isEliminated) return;
@@ -173,14 +204,13 @@ class Flag {
         const dist = Math.sqrt(dx * dx + dy * dy);
         const boundaryDist = CONFIG.ring.radius - this.radius;
         
-        // Only apply steering when getting close to the boundary (within 80% of radius)
-        if (dist < boundaryDist * 0.7) return;
-        
         // Calculate current angle from center
         const currentAngle = Math.atan2(dy, dx);
         
-        // Calculate gap center angle
-        const gapCenterAngle = state.gapStartAngle + state.ringRotation + (CONFIG.ring.gapAngle / 2);
+        // Calculate gap angles
+        const gapStart = state.gapStartAngle + state.ringRotation;
+        const gapEnd = gapStart + CONFIG.ring.gapAngle;
+        const gapCenterAngle = gapStart + (CONFIG.ring.gapAngle / 2);
         
         // Normalize angles
         let normCurrent = currentAngle % (Math.PI * 2);
@@ -193,31 +223,46 @@ class Flag {
         if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
         
-        // Only steer if heading toward the gap (within ~60 degrees)
-        if (Math.abs(angleDiff) > Math.PI / 3) return;
+        // Check if we're in the danger zone (near gap, within ~90 degrees)
+        const inDangerZone = Math.abs(angleDiff) < Math.PI / 2;
         
-        // Check if velocity is pointing outward toward the gap
+        if (!inDangerZone) return;
+        
+        // Check if velocity is pointing outward
         const velAngle = Math.atan2(this.vy, this.vx);
-        const outwardAngle = currentAngle;
-        let velToOutward = velAngle - outwardAngle;
+        let velToOutward = velAngle - currentAngle;
         if (velToOutward > Math.PI) velToOutward -= Math.PI * 2;
         if (velToOutward < -Math.PI) velToOutward += Math.PI * 2;
         
-        // Only steer if moving somewhat outward (within 90 degrees of outward direction)
-        if (Math.abs(velToOutward) > Math.PI / 2) return;
+        const movingOutward = Math.abs(velToOutward) < Math.PI / 2;
         
-        // Calculate steering strength based on proximity to boundary and gap
-        const proximityFactor = (dist - boundaryDist * 0.7) / (boundaryDist * 0.3); // 0 to 1
-        const gapProximityFactor = 1 - (Math.abs(angleDiff) / (Math.PI / 3)); // 1 at gap center, 0 at edges
-        const steerStrength = 0.015 * proximityFactor * gapProximityFactor; // Very subtle
+        // Calculate proximity to boundary (0 = center, 1 = at boundary)
+        const proximityFactor = dist / boundaryDist;
         
-        // Steer perpendicular to gap direction (away from gap center)
-        // Determine which direction to steer (clockwise or counter-clockwise)
+        // Determine steering direction (away from gap center)
         const steerDirection = angleDiff > 0 ? -1 : 1;
         
         // Apply tangential velocity adjustment
         const tangentX = -dy / dist;
         const tangentY = dx / dist;
+        
+        // Steering strength increases dramatically as we get closer to boundary AND gap
+        const gapProximityFactor = 1 - (Math.abs(angleDiff) / (Math.PI / 2));
+        let steerStrength;
+        
+        if (proximityFactor > 0.9 && movingOutward) {
+            // CRITICAL: Very close to boundary and moving outward toward gap
+            // Apply strong steering to ensure we miss the gap
+            steerStrength = 0.15 * gapProximityFactor;
+        } else if (proximityFactor > 0.7 && movingOutward) {
+            // Getting close, apply moderate steering
+            steerStrength = 0.05 * gapProximityFactor * proximityFactor;
+        } else if (proximityFactor > 0.5) {
+            // Gentle early steering
+            steerStrength = 0.02 * gapProximityFactor * proximityFactor;
+        } else {
+            return; // Too far from boundary, no steering needed
+        }
         
         this.vx += tangentX * steerDirection * steerStrength * this.speed;
         this.vy += tangentY * steerDirection * steerStrength * this.speed;
