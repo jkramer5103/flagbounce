@@ -62,6 +62,14 @@ const state = {
         scale: 1,
         scaleDirection: 1,
         animationSpeed: 0.02
+    },
+    eventTracking: {
+        lastWinner: null,
+        consecutiveWins: 0,
+        announced100Remaining: false,
+        announced50Remaining: false,
+        announced15Remaining: false,
+        announced3Remaining: false
     }
 };
 
@@ -382,6 +390,23 @@ function updateLeaderboard() {
 function checkWinner() {
     const remaining = state.flags.filter(f => !f.isOut);
     
+    // Check for remaining countries milestones
+    if (state.gamePhase === 'playing') {
+        if (remaining.length === 100 && !state.eventTracking.announced100Remaining) {
+            playEventAudio('100_remaining');
+            state.eventTracking.announced100Remaining = true;
+        } else if (remaining.length === 50 && !state.eventTracking.announced50Remaining) {
+            playEventAudio('50_remaining');
+            state.eventTracking.announced50Remaining = true;
+        } else if (remaining.length === 15 && !state.eventTracking.announced15Remaining) {
+            playEventAudio('15_remaining');
+            state.eventTracking.announced15Remaining = true;
+        } else if (remaining.length === 3 && !state.eventTracking.announced3Remaining) {
+            playEventAudio('3_remaining');
+            state.eventTracking.announced3Remaining = true;
+        }
+    }
+    
     if (remaining.length === 1 && state.gamePhase === 'playing') {
         state.winner = remaining[0];
         state.gamePhase = 'winner';
@@ -394,6 +419,24 @@ function checkWinner() {
             };
         }
         state.leaderboard[country.code].wins++;
+        
+        // Check for win streaks
+        if (state.eventTracking.lastWinner === country.code) {
+            state.eventTracking.consecutiveWins++;
+            
+            // Announce streak milestones (play after winner announcement)
+            if (state.eventTracking.consecutiveWins === 2) {
+                playEventAudio('2_streak', 2000);
+            } else if (state.eventTracking.consecutiveWins === 3) {
+                playEventAudio('3_streak', 2000);
+            } else if (state.eventTracking.consecutiveWins === 5) {
+                playEventAudio('5_streak', 2000);
+            }
+        } else {
+            state.eventTracking.lastWinner = country.code;
+            state.eventTracking.consecutiveWins = 1;
+        }
+        
         updateLeaderboard();
         
         // Report to server
@@ -401,6 +444,13 @@ function checkWinner() {
         
         showWinnerAnnouncement(country);
         announceWinner(country);
+        
+        // Randomly play an exciting announcement (20% chance)
+        if (Math.random() < 0.2) {
+            const excitingAnnouncements = ['intense_round', 'nail_biter', 'spectacular', 'unbelievable', 'amazing', 'incredible'];
+            const randomAnnouncement = excitingAnnouncements[Math.floor(Math.random() * excitingAnnouncements.length)];
+            playEventAudio(randomAnnouncement, 2500);
+        }
         
         // Auto-reset after 3.5 seconds
         setTimeout(() => {
@@ -431,6 +481,18 @@ function showWinnerAnnouncement(country) {
 // Hide winner announcement
 function hideWinnerAnnouncement() {
     document.getElementById('winner-announcement').classList.add('hidden');
+}
+
+// Play event TTS audio
+function playEventAudio(eventName, delay = 0) {
+    setTimeout(() => {
+        const audioPath = `assets/tts/${eventName}.mp3`;
+        const audio = new Audio(audioPath);
+        audio.volume = 1.0;
+        audio.play().catch(error => {
+            console.warn(`Failed to play event audio ${eventName}:`, error);
+        });
+    }, delay);
 }
 
 // TTS announcement using pre-recorded audio files
@@ -467,6 +529,13 @@ function resetGame() {
     state.gamePhase = 'playing';
     state.winner = null;
     state.ringRotation = 0;
+    
+    // Reset remaining countries announcements
+    state.eventTracking.announced100Remaining = false;
+    state.eventTracking.announced50Remaining = false;
+    state.eventTracking.announced15Remaining = false;
+    state.eventTracking.announced3Remaining = false;
+    
     initFlags();
 }
 
